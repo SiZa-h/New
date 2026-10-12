@@ -1,0 +1,6 @@
+{
+	"model": {
+		"type": "minecraft:model",
+		"model": "new-mod:item/obsidian_cube"
+	}
+}

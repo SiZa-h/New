@@ -1,0 +1,30 @@
+{
+	"schemaVersion": 1,
+	"id": "new-mod",
+	"version": "${version}",
+	"name": "New Mod",
+	"description": "Adds the Black Block, the Black Block Star, the Obsidian Cube and a set of shape-summoning abilities: short and long black block pillars, clash pillars driven by mouse gestures, a black hole, mark-based pillar barrages, plus sneak-triggered dash and infection abilities.",
+	"authors": [
+		"siza-h"
+	],
+	"license": "MIT",
+	"icon": "assets/new-mod/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.sizah.NewMod"
+		],
+		"client": [
+			"com.sizah.client.NewModClient"
+		],
+		"fabric-datagen": [
+			"com.sizah.NewModDataGenerator"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

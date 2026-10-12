@@ -1,0 +1,54 @@
+# gradle
+
+.gradle/
+build/
+out/
+classes/
+
+# eclipse
+
+*.launch
+
+# idea
+
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# vscode
+
+.settings/
+.vscode/
+bin/
+.classpath
+.project
+
+# macos
+
+*.DS_Store
+
+# fabric
+
+run/
+
+# java
+
+hs_err_*.log
+replay_*.log
+*.hprof
+*.jfr
+
+# local previews written by `node tools/gen-assets.js --preview` (the committed ones live in docs/preview)
+tools/preview/
+
+# scratch directories used while working
+.scratch*/
+
+# translation working copies (never ship)
+.translation-backup/
+# portable git downloaded by the publishing step (never ship)
+.tools/
+
+# development notes: kept locally, deliberately not published
+learn/
