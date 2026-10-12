@@ -78,10 +78,6 @@ node tools/check-assets.js                  # validate the generated assets
 
 The how and why (hand-written PNG structure, voxel spheres, item-atlas rules, 26.3 model limitations) is documented in the generator's own comments. The images above are produced by `--preview` into `docs/preview/`.
 
-## Development notes
-
-A Chinese tutorial series (one article per feature: the concept, the data flow, the code, the parameters and the pitfalls actually hit while building it) lives in a local `learn/` folder that is **deliberately not published** — `.gitignore` excludes it. The same knowledge is carried by the code comments and by `README.zh_cn.md`.
-
 ## License
 
 [MIT](LICENSE) © 2026 siza-h.
