@@ -128,12 +128,6 @@
 - [`src/main/resources/data/minecraft`](src/main/resources/data/minecraft) — 扩展原版标签（把自定义伤害类型加进 `damage_type/bypasses_armor`）
 - `learn/` — 中文开发笔记，**仅在本地保留、不随仓库发布**（见下）
 
-## 开发笔记（learn，本地保留）
-
-**约定：每次功能改动都要在 `learn/` 增补一篇「通俗且深入」的教程**——先讲清概念与数据流，再给可运行的代码，最后附上参数速查、常见坑与验证方式。
-
-这套笔记**仅在本地保留、不随仓库发布**（`learn/` 已写进 `.gitignore`），所以公开仓库里读不到它们；想看同样的知识，请以代码注释与 [`README.md`](README.md) 为准。
-
 ## 作者与许可
 
 作者：siza-h。以 CC0-1.0 许可发布，详见 [`LICENSE`](LICENSE)；项目基于 Fabric 官方示例模板搭建。
