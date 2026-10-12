@@ -49,6 +49,3 @@ tools/preview/
 .translation-backup/
 # portable git downloaded by the publishing step (never ship)
 .tools/
-
-# development notes: kept locally, deliberately not published
-learn/
