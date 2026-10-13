@@ -27,7 +27,9 @@ jobs:
 
 
     - name: Build with Gradle
-      run: sudo ./gradlew build
+      run: |
+        chmod +x gradlew
+        ./gradlew build
 
 
     - name: Check jar output
