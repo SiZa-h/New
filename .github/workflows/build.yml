@@ -24,7 +24,7 @@ jobs:
 
 
     - name: Build with Gradle
-      run: ./gradlew build
+      run: sudo./gradlew build
 
 
     - name: Upload Release
