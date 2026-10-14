@@ -1,13 +1,22 @@
 package com.sizah.client;
 
+import com.sizah.client.input.GestureInput;
+import com.sizah.client.input.WhiteStarInput;
+import com.sizah.client.render.BlackBlockPillarRenderer;
+import com.sizah.client.render.InvisibleRenderer;
+import com.sizah.client.render.WhitePillarRenderer;
+import com.sizah.client.settings.ClientSettings;
+import com.sizah.client.settings.ModSettingsScreen;
+import com.sizah.common.config.Settings;
+import com.sizah.content.item.ModItems;
+import com.sizah.content.weapon.WeaponCooldowns;
+
 import com.mojang.blaze3d.platform.InputConstants;
-import com.sizah.NewMod;
-import com.sizah.entity.ModEntities;
-import com.sizah.item.PillarKind;
-import com.sizah.item.PillarWeaponItem;
-import com.sizah.network.CorruptPayload;
-import com.sizah.network.FirePillarPayload;
-import com.sizah.network.ModNetworking;
+import com.sizah.common.NewMod;
+import com.sizah.content.weapon.entity.ModEntities;
+import com.sizah.content.weapon.PillarKind;
+import com.sizah.content.weapon.PillarWeaponItem;
+import com.sizah.common.network.CorruptPayload;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -15,9 +24,11 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.event.client.player.ClientPreAttackCallback;
+import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.SwingAnimation;
 
@@ -43,6 +54,10 @@ public class NewModClient implements ClientModInitializer {
 		EntityRenderers.register(ModEntities.VERTICAL_AXIS_PILLAR, BlackBlockPillarRenderer::new);
 		EntityRenderers.register(ModEntities.BARRAGE_PILLAR, BlackBlockPillarRenderer::new);
 		EntityRenderers.register(ModEntities.DASH_PILLAR, BlackBlockPillarRenderer::new);
+
+		// The white block star's bolt: the same drawing trick, but it flies instead of growing, and it is drawn
+		// as white blocks (see WhitePillarRenderer).
+		EntityRenderers.register(ModEntities.WHITE_PILLAR, WhitePillarRenderer::new);
 
 		// The entities below are logic only and should have no appearance: they all use the same "draw nothing" renderer
 		EntityRenderers.register(ModEntities.BLACK_HOLE, InvisibleRenderer::new);
@@ -70,6 +85,14 @@ public class NewModClient implements ClientModInitializer {
 		// Push the settings over on every world/server join (the server side keeps them in memory only, so this is what keeps the two in step)
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ClientSettings.send());
 
+		// The white block star's two held abilities: hold left = a stream of white pillars, hold right = carry the
+		// creature under the crosshair. It has a tick handler of its own because both last as long as the button is
+		// down, which is not something a click callback can report.
+		ClientTickEvents.END_CLIENT_TICK.register(WhiteStarInput::tick);
+
+		// Leaving the world must not leave the server thinking a button is still down.
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> WhiteStarInput.releaseAll());
+
 		ClientPreAttackCallback.EVENT.register((client, player, clickCount) -> {
 			// clickCount is non-zero only on the press itself; while the left button is held it stays 0, so nothing repeats.
 			if (clickCount == 0) {
@@ -78,18 +101,24 @@ public class NewModClient implements ClientModInitializer {
 
 			ItemStack stack = player.getMainHandItem();
 
+			// The white block star: the left button is its held fire (started and stopped by WhiteStarInput), and
+			// sneak + left is its white block infection. Vanilla attacking is intercepted either way.
+			if (stack.getItem() == ModItems.WHITE_BLOCK_STAR) {
+				if (player.isShiftKeyDown()) {
+					WhiteStarInput.sendCorrupt();
+					player.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, true);
+				}
+
+				return true;
+			}
+
 			// Neither the Black Block Star nor the Obsidian Cube uses the normal attack key: the left button is the skill key.
-			if (!(stack.getItem() instanceof PillarWeaponItem)) {
+			if (!(stack.getItem() instanceof PillarWeaponItem weapon)) {
 				return false;
 			}
 
-			// A left single click is the opener of a "vertical gesture", so record it first (it does not affect this shot)
-			GestureInput.onLeftClick();
-
 			// Sneak + left click (Black Block Star only): infect the blocks in front, do not fire a short pillar
-			if (player.isShiftKeyDown()
-					&& stack.getItem() instanceof PillarWeaponItem weapon
-					&& weapon.kind() == PillarKind.BLACK_BLOCK) {
+			if (player.isShiftKeyDown() && weapon.kind() == PillarKind.BLACK_BLOCK) {
 				if (ClientPlayNetworking.canSend(CorruptPayload.TYPE)) {
 					ClientPlayNetworking.send(CorruptPayload.INSTANCE);
 					player.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, true);
@@ -98,26 +127,27 @@ public class NewModClient implements ClientModInitializer {
 				return true;      // intercept the vanilla left click
 			}
 
-			// View motion gate (behaviour no. 1): it only opens when both the horizontal and the
-			// vertical turn within one tick stay below ViewMotion.STILL_LIMIT_DEGREES degrees;
-			// otherwise do nothing and let the vanilla left click run as usual (so attacking/mining still works).
-			if (!ModNetworking.viewStill(player)) {
-				return false;
+			// Everything else is handled by GestureInput, which decides whether this click opens a vertical
+			// gesture or joins the previous click to make the double click that fires the short pillar. The click
+			// is only *recorded* here and the pillar request goes out later, from GestureInput.
+			//
+			// There is no view-motion gate any more, and a lone click fires nothing at all.
+			return GestureInput.onLeftClick();
+		});
+
+		// Mining is suppressed while the white block star is held with the left button down: that button is its
+		// fire, so it must not also chew through the wall in front of the player.
+		//
+		// This is needed on top of the attack callback above because vanilla only routes the **press** through
+		// startAttack(); for as long as the button stays down it goes straight to the block-breaking loop instead.
+		// The event fires on both sides, so the client never starts mining and the server refuses it if it ever
+		// arrives from elsewhere.
+		AttackBlockCallback.EVENT.register((player, level, hand, pos, direction) -> {
+			if (hand == InteractionHand.MAIN_HAND && player.getMainHandItem().getItem() == ModItems.WHITE_BLOCK_STAR) {
+				return InteractionResult.FAIL;      // no mining, no swinging at blocks: this button fires pillars
 			}
 
-			if (!ClientPlayNetworking.canSend(FirePillarPayload.TYPE)) {
-				return false; // the server does not have this mod / is not connected yet
-			}
-
-			ClientPlayNetworking.send(FirePillarPayload.INSTANCE);
-
-			// Purely visual cooldown animation: the cooldowns of the left and right buttons are decided
-			// **independently** on the server side (see WeaponCooldowns), so the client sets no gate
-			// here — otherwise the right-click animation would block the left click along with it.
-			player.getCooldowns().addCooldown(stack, ModNetworking.FIRE_COOLDOWN_TICKS);
-			player.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, true); // the vanilla swing was intercepted, so replay it here
-
-			return true; // intercept the vanilla left-click handling
+			return InteractionResult.PASS;
 		});
 	}
 }

@@ -25,6 +25,11 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// The data generation API is one module inside the Fabric API bundle, and a nested bundle module is not on
+	// the compile classpath on its own — so it is declared explicitly here. This is what makes
+	// `./gradlew runDatagen` and the providers in com.sizah.datagen compile.
+	implementation "net.fabricmc.fabric-api:fabric-data-generation-api-v1:${project.fabric_datagen_version}"
 }
 
 processResources {
@@ -58,6 +63,23 @@ jar {
 		rename { "${it}_$projectName"}
 	}
 }
+
+// `src/main/generated` is the output of `runDatagen`, and Loom puts it on the main source set, so it otherwise
+// ends up in the sources jar as well. That is the one thing worth avoiding here: the generated JSON is data
+// (models, loot, tags, language files) and it already travels inside the normal jar.
+tasks.named("sourcesJar") {
+	exclude("src/main/generated/**")
+}
+
+// **Run the generator in its own invocation**: `./gradlew runDatagen` and then `./gradlew build`.
+//
+// The generator runs on the compiled mod (`runDatagen` needs `classes`), while `sourcesJar` reads the folder the
+// generator writes, and those two cannot be ordered — a dependency from `runDatagen` to `sourcesJar` is circular.
+// Putting both in one command therefore trips Gradle's "implicit dependency" validation, which is exactly what CI
+// used to do; the workflow now runs the two steps separately.
+//
+// The generated JSON is committed to version control, which is what makes a plain `./gradlew build` on a fresh
+// checkout produce a complete jar. Re-run `runDatagen` and commit after adding content (see README).
 
 // configure the maven publication
 publishing {

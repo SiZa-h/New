@@ -1,6 +1,6 @@
 # New Mod
 
-A **Fabric** mod for **Minecraft 26.3** that adds the **Black Block**, the pillar weapon **Black Block Star**, the **Obsidian Cube**, and a set of shape-summoning abilities built around black block pillars — collisions, black holes, mark-based barrages and two sneak skills.
+A **Fabric** mod for **Minecraft 26.3** that adds the **Black Block**, its exact opposite the **White Block**, the pillar weapon **Black Block Star**, the **Obsidian Cube**, and a set of shape-summoning abilities built around black block pillars — collisions, black holes, mark-based barrages and two sneak skills. The **White Block Star** is in place as a working sword whose abilities are still to be designed.
 
 > 中文说明见 [`README.zh_cn.md`](README.zh_cn.md)
 
@@ -23,8 +23,31 @@ A **Fabric** mod for **Minecraft 26.3** that adds the **Black Block**, the pilla
 ```bash
 ./gradlew build          # jar lands in build/libs/
 ./gradlew runClient      # launch a development client
-./gradlew runDatagen     # regenerate data (headless)
+./gradlew runDatagen     # regenerate models, loot, tags and language files
 ```
+
+> **Run `./gradlew runDatagen` after adding content.** Block states, models, loot tables, tags and both language
+> files are generated; without it the game shows untranslated names and missing models. The generated output in
+> `src/main/generated` is committed and must not be edited by hand — see
+> [`src/main/java/com/sizah/content/README.md`](src/main/java/com/sizah/content/README.md) for the rules.
+
+## Project layout
+
+```
+src/main/java/com/sizah/
+├── common/     entry point, registration helpers (SimpleRegistry), tags, config, damage types, packets
+├── content/    one package per kind of content: block / item / weapon / tool / armor / food / mob /
+│               projectile / machine / world / enchant / effect, plus the creative tab
+├── client/     client entry point, mouse gestures, renderers, settings screen
+└── datagen/    data providers (models, both language files, loot, recipes, tags)
+
+src/main/generated/   data generator output (do not edit)
+src/main/resources/   hand-written assets: textures, 3D weapon models, damage type JSON
+```
+
+The shortest path for adding a block, item, tool or mob is written down in
+[`content/README.md`](src/main/java/com/sizah/content/README.md); the step-by-step notes behind every existing
+feature are in [`learn/`](learn/README.md).
 
 ## Assets
 
@@ -42,4 +65,6 @@ The how and why (hand-written PNG structure, voxel spheres, item-atlas rules, 26
 
 [MIT](LICENSE) © 2026 siza-h.
 
-This mod is not affiliated with Mojang Studios or Microsoft. "Minecraft" is a trademark of Mojang Synergies AB; this project only links against the official game and Fabric APIs, and redistributes no Mojang assets.
+The MIT license applies to this project's original code, documentation and assets. The project started from the [Fabric Example Mod](https://github.com/FabricMC/fabric-example-mod) template, which is dedicated to the public domain under [CC0-1.0](https://github.com/FabricMC/fabric-example-mod/blob/26.3/LICENSE); that dedication for template-derived material is not withdrawn by this repository's MIT license. Third-party dependencies and other upstream material remain subject to their respective licenses. This mod is not affiliated with Mojang Studios or Microsoft. "Minecraft" is a trademark of Mojang Synergies AB; this project only links against the official game and Fabric APIs, and redistributes no Mojang assets.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and [SECURITY.md](SECURITY.md) for repository policies.

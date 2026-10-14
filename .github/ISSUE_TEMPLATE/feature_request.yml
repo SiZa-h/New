@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an improvement or new feature.
+body:
+  - type: markdown
+    attributes:
+      value: Check existing issues first. Describe the gameplay or project need; implementation details are optional.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What limitation or user need would this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you would like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

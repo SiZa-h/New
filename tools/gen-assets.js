@@ -7,9 +7,18 @@
  *   node tools/gen-assets.js --preview <dir>     extra output: magnified texture preview + isometric model preview
  *
  * Output:
- *   assets/new-mod/textures/item/black_block_star.png  16x16  pure white glowing small ball (spherical highlight + very faint four-point star glint)
- *   assets/new-mod/models/item/black_block_star.json   3D model: one small ball + 8 orbiting micro black blocks
- *   assets/new-mod/icon.png                            128x128 mod icon (eldritch style)
+ *   assets/new-mod/textures/item/black_block_star.png        16x16  pure white glowing small ball (spherical highlight + very faint four-point star glint)
+ *   assets/new-mod/textures/item/black_block_star_block.png  16x16  micro black block used by the orbiting blocks
+ *   assets/new-mod/models/item/black_block_star.json         3D model: one small ball + 8 orbiting micro black blocks
+ *   assets/new-mod/textures/item/white_block_star.png        16x16  the same ball **inverted**: dark core with a pure white rim
+ *   assets/new-mod/textures/item/white_block_star_block.png  16x16  micro white block
+ *   assets/new-mod/models/item/white_block_star.json         3D model: same shape, the white star's textures
+ *   assets/new-mod/icon.png                                  128x128 mod icon (eldritch style)
+ *
+ * The white block star is the black block star's mirror, so its artwork is the same drawing with every colour
+ * channel inverted (`invert = true`) instead of a second hand-made picture: the white orb becomes a dark core
+ * with a white rim, and the orbiting micro black blocks become micro white blocks. Change one and the other
+ * follows.
  *
  * The PNG is hand-written: file signature + IHDR + IDAT(zlib) + IEND, each chunk carrying a CRC32 —— no image library needed.
  */
@@ -238,14 +247,18 @@ const OUT = path.join(__dirname, '..', 'src', 'main', 'resources', 'assets', 'ne
  * bright center, highlight at the upper left, edges fading out, and then a very faint
  * four-point star glint layered on top, so that up close you can tell this is a "star".
  */
-function starOrb() {
+function starOrb(invert = false) {
 	const canvas = new Canvas(16, 16);
 	const c = 7.5;
+	// The white block star is the black block star's mirror: same drawing, every colour channel inverted.
+	// The inversion also flips the alpha, so the white orb ends up as a **dark core with a white rim**.
+	const tone = (value) => (invert ? 255 - value : value);
 
-	canvas.glow(c, c, 8.0, 0.88, 2.3);              // sphere main light
-	canvas.glow(c - 2.1, c - 2.5, 3.4, 0.95, 2.0);  // upper-left highlight
-	canvas.glow(c + 2.4, c + 2.8, 3.0, 0.35, 2.2);  // lower-right bounce light (spherical feel)
-	canvas.star(c, c, 5.4, 0.8, 4, 9.0, 0.15);      // press only one **very faint** four-point star glint onto the ball's center
+	canvas.glow(c, c, 8.0, 0.88, 2.3, tone(255), tone(255), tone(255));              // sphere main light
+	canvas.glow(c - 2.1, c - 2.5, 3.4, 0.95, 2.0, tone(255), tone(255), tone(255));  // upper-left highlight
+	canvas.glow(c + 2.4, c + 2.8, 3.0, 0.35, 2.2, tone(255), tone(255), tone(255));  // lower-right bounce light (spherical feel)
+	// press only one **very faint** four-point star glint onto the ball's center
+	canvas.star(c, c, 5.4, 0.8, 4, 9.0, 0.15, tone(255), tone(255), tone(255));
 
 	return canvas;
 }
@@ -261,12 +274,13 @@ function starOrb() {
  * the whole model fails to bake and the item shows up in game as the black-and-purple "missing model".
  * So here we draw a separate micro block texture under textures/item/ instead of sharing the block's.
  */
-function starMicroBlock() {
+function starMicroBlock(invert = false) {
 	const canvas = new Canvas(16, 16);
-	const random = mulberry32(0xB10C);
-	const base = [10, 10, 14];
-	const edge = [26, 26, 34];
-	const high = [54, 54, 66];
+	const random = mulberry32(invert ? 0xF00D : 0xB10C);
+	const flip = (channel) => (invert ? 255 - channel : channel);
+	const base = [10, 10, 14].map(flip);
+	const edge = [26, 26, 34].map(flip);
+	const high = [54, 54, 66].map(flip);
 
 	// base color
 	canvas.rect(0, 0, 15, 15, 1, base[0], base[1], base[2]);
@@ -334,7 +348,7 @@ function faceMap(faces, texture) {
 	return out;
 }
 
-function itemModel() {
+function itemModel(name = 'black_block_star') {
 	const elements = [];
 
 	for (const slice of BALL_SLICES) {
@@ -370,9 +384,9 @@ function itemModel() {
 		gui_light: 'front',
 		textures: {
 			// both textures must come from the item atlas, otherwise the model fails to bake because of "multiple atlases"
-			orb: 'new-mod:item/black_block_star',
-			block: 'new-mod:item/black_block_star_block',
-			particle: 'new-mod:item/black_block_star',
+			orb: `new-mod:item/${name}`,
+			block: `new-mod:item/${name}_block`,
+			particle: `new-mod:item/${name}`,
 		},
 		// there is no parent model, so the held/dropped/displayed transforms must all be written out by hand;
 		// the +Y of translation is exactly that gap which makes it "float in the hand".
@@ -552,7 +566,7 @@ function texturePreview(canvas, factor) {
  *   sx = (x - z) * cos30 ;  sy = (x + z) * sin30 - y
  * That is entirely enough to check a layout like "ball in the middle, blocks all around".
  */
-function modelPreview(model, scale = 11) {
+function modelPreview(model, scale = 11, invert = false) {
 	const size = Math.ceil(32 * scale);
 	const canvas = new Canvas(size, size);
 	const cos30 = Math.cos(Math.PI / 6);
@@ -577,7 +591,9 @@ function modelPreview(model, scale = 11) {
 		const [x1, y1, z1] = box.max;
 		const corner = (x, y, z) => project([x, y, z]);
 		const orb = box.element.faces.north.texture === BALL_TEXTURE;
-		const base = orb ? 245 : 40;
+		// The white block star is the inverted palette: a dark ball with bright orbiting blocks (see the main flow).
+		const light = invert ? !orb : orb;
+		const base = light ? 245 : 40;
 		// top face (y1)
 		canvas.polygon([corner(x0, y1, z0), corner(x1, y1, z0), corner(x1, y1, z1), corner(x0, y1, z1)], 1, base, base, base);
 		// south face (z1)
@@ -595,29 +611,48 @@ function modelPreview(model, scale = 11) {
 
 console.log('Generating New Mod art assets...');
 
-const orb = starOrb();
-writePNG(path.join(OUT, 'textures', 'item', 'black_block_star.png'), 16, 16, orb.data);
-
-const micro = starMicroBlock();
-writePNG(path.join(OUT, 'textures', 'item', 'black_block_star_block.png'), 16, 16, micro.data);
-
 const icon = modIcon();
 writePNG(path.join(OUT, 'icon.png'), 128, 128, icon.data);
 
-const model = itemModel();
-const modelFile = path.join(OUT, 'models', 'item', 'black_block_star.json');
-fs.mkdirSync(path.dirname(modelFile), { recursive: true });
-fs.writeFileSync(modelFile, formatJSON(model));
-console.log(`  ${path.relative(process.cwd(), modelFile)}  ${model.elements.length} elements` +
-	` (ball ${BALL_SLICES.length} slices + orbiting blocks ${ORBIT_COUNT})`);
+// The black block star and its mirror image, the white block star: one drawing, two polarities.
+const STARS = [
+	{ name: 'black_block_star', invert: false },
+	{ name: 'white_block_star', invert: true },
+];
+
+const stars = {};
+
+for (const star of STARS) {
+	const orb = starOrb(star.invert);
+	writePNG(path.join(OUT, 'textures', 'item', `${star.name}.png`), 16, 16, orb.data);
+
+	const micro = starMicroBlock(star.invert);
+	writePNG(path.join(OUT, 'textures', 'item', `${star.name}_block.png`), 16, 16, micro.data);
+
+	const model = itemModel(star.name);
+	const modelFile = path.join(OUT, 'models', 'item', `${star.name}.json`);
+	fs.mkdirSync(path.dirname(modelFile), { recursive: true });
+	fs.writeFileSync(modelFile, formatJSON(model));
+	console.log(`  ${path.relative(process.cwd(), modelFile)}  ${model.elements.length} elements` +
+		` (ball ${BALL_SLICES.length} slices + orbiting blocks ${ORBIT_COUNT})`);
+
+	stars[star.name] = { orb, model };
+}
 
 if (process.argv[2] === '--preview') {
 	const dir = process.argv[3] || path.join(__dirname, 'preview');
-	const orbBig = texturePreview(orb, 16);
-	const modelBig = modelPreview(model);
+	const orbBig = texturePreview(stars.black_block_star.orb, 16);
+	const modelBig = modelPreview(stars.black_block_star.model);
 
 	writePNG(path.join(dir, 'orb-preview.png'), orbBig.width, orbBig.height, orbBig.data);
 	writePNG(path.join(dir, 'model-preview.png'), modelBig.width, modelBig.height, modelBig.data);
+
+	// the white star's own previews, so the pair can be compared at a glance
+	const whiteOrbBig = texturePreview(stars.white_block_star.orb, 16);
+	const whiteModelBig = modelPreview(stars.white_block_star.model, 11, true);
+
+	writePNG(path.join(dir, 'orb-preview-white.png'), whiteOrbBig.width, whiteOrbBig.height, whiteOrbBig.data);
+	writePNG(path.join(dir, 'model-preview-white.png'), whiteModelBig.width, whiteModelBig.height, whiteModelBig.data);
 }
 
 console.log('Done.');

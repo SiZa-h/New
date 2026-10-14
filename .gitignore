@@ -5,6 +5,9 @@ build/
 out/
 classes/
 
+# the data generator's incremental cache (the generated assets/data themselves are committed)
+src/main/generated/.cache/
+
 # eclipse
 
 *.launch

@@ -1,0 +1,52 @@
+name: Bug report
+description: Report a reproducible problem with the mod.
+body:
+  - type: markdown
+    attributes:
+      value: Before submitting, check whether the issue has already been reported. Do not include passwords, access tokens, or other private information.
+  - type: input
+    id: mod-version
+    attributes:
+      label: Mod version
+      placeholder: e.g. 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: minecraft-version
+    attributes:
+      label: Minecraft version
+      placeholder: e.g. 26.3
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include Java, Fabric Loader, Fabric API, and relevant mod versions.
+      placeholder: |
+        Java:
+        Fabric Loader:
+        Fabric API:
+        Other relevant mods:
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest set of steps that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Remove private information before posting logs.
+    validations:
+      required: false

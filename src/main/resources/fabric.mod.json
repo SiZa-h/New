@@ -12,13 +12,13 @@
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.sizah.NewMod"
+			"com.sizah.common.NewMod"
 		],
 		"client": [
 			"com.sizah.client.NewModClient"
 		],
 		"fabric-datagen": [
-			"com.sizah.NewModDataGenerator"
+			"com.sizah.datagen.NewModDataGenerator"
 		]
 	},
 	"depends": {
