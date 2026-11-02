@@ -107,22 +107,30 @@ Marks.applyAndSync(target, Marks.WHITE);        // 白标记 W，另一半是黑
 - `hitTargets` 保证**一根柱子对同一目标只结算一次**；
 - 命中即 `discard()`（单体弹丸），与"碰方块残留"是两条不同的结束路径。
 
-## 6. 发射方式：周边生成 → 朝准心汇聚
+## 6. 发射方式：**身后一圈**生成 → 朝准心汇聚
 
 服务端每 2 tick 一根（`WhiteStarFire`）：
 
 ```java
 Vec3 aim = player.getEyePosition().add(view.scale(AIM_DISTANCE));   // 准心前方 48 格
-// 以视线为轴的圆环上取一点，作为出生点
-Vec3 around = side.scale(cos(angle) * SPAWN_RADIUS)
-		.add(0, SPAWN_HEIGHT + sin(angle) * SPAWN_RADIUS * 0.5, 0)
-		.add(view.scale(SPAWN_RADIUS));
+// 在玩家**身后 1 格**、垂直于视线的平面上取一个圆环，柱子从背后射出来
+Vec3 center = player.position()
+		.add(0, player.getBbHeight() * 0.5, 0)
+		.subtract(view.scale(SPAWN_BACK));                          // SPAWN_BACK = 1.0
+Vec3 side = new Vec3(-view.z, 0.0D, view.x).normalize();
+Vec3 up = view.cross(side).normalize();
+Vec3 ring = side.scale(cos(angle) * SPAWN_RADIUS)
+		.add(up.scale(sin(angle) * SPAWN_RADIUS));
+Vec3 spawn = center.add(ring);
 pillar.setFlightDirection(aim.subtract(spawn));                     // 于是所有柱子"汇聚"到准心
 ```
 
-- 出生点**不在准心正前方**，而是在玩家周围的环上 → 视觉上是"从身边射出去"；
+- 出生点 = **身后 1 格**为中心、半径 1.2 格的**圆环**（垂直于视线），所以柱子从背后绕出来再飞过玩家；
 - 方向是"出生点 → 准心前方一点"，所以柱子会**收敛**，而不是互相平行的管道；
 - 发射频率、射程判断都在服务端（客户端只说"按住/松开"），改过的客户端无法把它变成机枪。
+
+> 这一处改过两次：先是"周边随机环"，再是"前方 1 格"，最终定为"**身后一圈**"。
+> 常量集中在 `SPAWN_BACK` / `SPAWN_RADIUS`，改出生位置不用碰别处。
 
 ## 7. 常见坑
 

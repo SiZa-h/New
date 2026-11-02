@@ -41,6 +41,9 @@
 | [25](25-renaming-packages-and-content-skeleton.md) | 目录重组与内容骨架（含批量改包时 BOM / 乱码 / 正则误伤三个坑） | `common/SimpleRegistry.java`、`content/**` |
 | [26](26-data-generation-and-build-pipeline.md) | 数据生成与构建流水线：让模型/掉落/标签/语言都由代码产出 | `datagen/**`、`build.gradle`、`.github/workflows/build.yml` |
 | [27](27-white-star-input-hold-and-offhand.md) | 白星的输入层：按住技能、潜行优先、把生物钉在视线上、副手连击 | `client/input/WhiteStarInput.java`、`content/weapon/{WhiteStarFire,PinTargets,OffhandWhiteStar}.java` |
+| [28](28-thorn-pillar-and-30-hit-storm.md) | 刺白方块柱：30 连击后的亚空间穿刺与绕视线圆周运动 | `content/weapon/entity/ThornPillarEntity.java`、`content/weapon/WhitePillarStrikes.java` |
+| [29](29-trigger-map-after-rebinding.md) | 触发映射表：两颗星的按键与行为（单击/双击共存、潜行层、查表用） | `client/input/**`、`content/weapon/**` |
+| [30](30-variant-trait-leakage-obsidian-pillar.md) | 让变体彻底独立：黑曜石柱不再吃黑星的被动与标记（特征泄漏审计法） | `content/weapon/PillarKind.java`、`content/weapon/entity/BlackBlockPillarEntity.java` |
 
 > **编号说明**：没有 `14` —— 那一篇对应的功能后来被整体回滚，文档一并删除；编号不复用，免得外部链接指错。
 

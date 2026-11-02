@@ -23,6 +23,7 @@ import com.sizah.content.projectile.ModProjectiles;
 import com.sizah.content.tool.ModTools;
 import com.sizah.content.weapon.OffhandWhiteStar;
 import com.sizah.content.weapon.PinTargets;
+import com.sizah.content.weapon.WhitePillarStrikes;
 import com.sizah.content.weapon.WhiteStarFire;
 import com.sizah.content.weapon.entity.ModEntities;
 import com.sizah.content.world.ModWorldGen;
@@ -84,6 +85,7 @@ public class NewMod implements ModInitializer {
 			Decay.tick(server);
 			WhiteStarFire.tick(server);
 			PinTargets.tick(server);
+			WhitePillarStrikes.tick(server);
 
 			for (ServerPlayer player : server.getPlayerList().getPlayers()) {
 				Corruption.tick(player);

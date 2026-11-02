@@ -11,17 +11,21 @@ import net.minecraft.world.level.block.Blocks;
 /**
  * The kinds of pillar weapon.
  *
- * <p>Both weapons share the same "left click fires a black block pillar" logic (the same entity, the
- * same network packet, the same geometry, reverse extension, destruction at both ends and knockback),
- * and only three things differ, all of them gathered here:
+ * <p>They share the growing-pillar machinery (the same entity class, the same network packet, the same geometry,
+ * reverse extension, destruction at both ends and knockback), and what differs is gathered here — plus the
+ * traits that belong to the **black block star alone**, which are gated by {@link #isBlackBlockStar()}:
  *
  * <ul>
  *     <li>{@link #block()}: which block the pillar is rendered as — this also decides the texture of
  *         the held model and of the entity model;</li>
  *     <li>{@link #touchDamage()}: the damage the pillar deals when it touches a mob;</li>
  *     <li>{@link #damageType()}: the damage type — **whether it bypasses armor depends entirely on
- *         whether that type is in the {@code bypasses_armor} tag**.</li>
+ *         whether that type is in the {@code bypasses_armor} tag**;</li>
+ *     <li>{@link #isBlackBlockStar()}: the +3 passive with the darkness effect, and the black mark **B**.</li>
  * </ul>
+ *
+ * <p>The obsidian cube's pillar is **created independently**: it only reuses the geometry, and every black block
+ * star trait is off for it (armour applies, no bonus, no darkness, no black mark).
  */
 public enum PillarKind {
 	/** Black Block Star: black block appearance, 6 points of damage that **bypasses armor**. */
@@ -53,6 +57,18 @@ public enum PillarKind {
 	/** Damage type key: decides the death message and whether armor is bypassed. */
 	public ResourceKey<DamageType> damageType() {
 		return this.damageType;
+	}
+
+	/**
+	 * Whether this kind carries the **black block star's** signature traits: the +3 passive with the darkness
+	 * effect, and the black mark **B**.
+	 *
+	 * <p>The obsidian cube's pillar is created independently: it only shares the growing-pillar geometry (the
+	 * entity class, the reverse extension, the destruction at both ends), and this returns {@code false} for it, so
+	 * none of the black block star's traits leak into it.
+	 */
+	public boolean isBlackBlockStar() {
+		return this == BLACK_BLOCK;
 	}
 
 	/** Look a kind up by index (used for the entity sync field); out of range falls back to the Black Block Star. */

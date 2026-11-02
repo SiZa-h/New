@@ -252,9 +252,14 @@ public final class GestureInput {
 				right ? ModNetworking.LONG_FIRE_COOLDOWN_TICKS : ModNetworking.FIRE_COOLDOWN_TICKS);
 	}
 
-	/** The main hand must hold the black block star (the obsidian block has no right-click, gesture or sneak ability). */
+	/**
+	 * The main hand must hold the black block star, and the player must **not** be sneaking: sneaking is the
+	 * star's second layer, which has its own inputs on the right button ({@code BlackStarSneakInput}), so the
+	 * pillars and the gestures stay out of the way while sneak is held.
+	 */
 	private static boolean usable(Player player) {
 		return Minecraft.getInstance().gui.screen() == null
+				&& !player.isShiftKeyDown()
 				&& player.getMainHandItem().getItem() instanceof PillarWeaponItem weapon
 				&& weapon.kind() == PillarKind.BLACK_BLOCK;
 	}

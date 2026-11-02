@@ -36,24 +36,30 @@
 
 | | 黑方块之星 | 白方块之星 |
 | --- | --- | --- |
-| 触发方式 | 双击左/右键出柱、单击+滑动出手势、潜行右键冲刺、潜行左键感染 | **按住左键**持续放出白柱、**按住右键**把准心生物钉在视线上、潜行左键感染成白方块 || 柱子实体 | `BlackBlockPillarEntity` 的 8 个类型（生长型光束） | `WhitePillarEntity`（**飞行型**：0.1 格粗、5 格长、256 格/秒、128 格射程） |
+| 触发方式 | 双击左/右键出柱、单击+滑动出手势、**潜行+双击右键冲刺、潜行+单击右键感染** | **按住左键**持续放出白柱（身后一圈生成）、**双击右键**切换抓取准心生物、**潜行+右键**感染成白方块 |
+| 柱子实体 | `BlackBlockPillarEntity` 的 8 个类型（生长型光束） | `WhitePillarEntity`（**飞行型**：0.1 格粗、5 格长、256 格/秒、128 格射程）+ `ThornPillarEntity`（刺柱） |
 | 命中标记 | 黑标记 **B**（`Marks.BLACK`） | 白标记 **W**（`Marks.WHITE`） |
 | 副手 | — | 副手持白星时，**任何造成伤害的攻击**都会生成 2~5 根白柱打击受害目标 |
 
 > **两个标记同时存在就触发「消散」**（`content/effect/Decay`）：每 0.5 秒受到 `2 × 已生效秒数` 的伤害，
 > 重复获得时**累加时长而不是重置**。
 
-> **潜行优先于白星的两个按住技能**：潜行时左键是感染、右键无效，客户端与服务端都按这条判定
-> （服务端也判，所以改过的客户端无法用"按住"绕过）。这也是为什么"潜行左键"不会顺带射出一根白柱。
+> **潜行是两颗星的"第二层"**：黑星潜行时左键无效、右键分单击/双击；白星潜行时左键发射无效、右键变感染。
+> 客户端与服务端都按这条判定（服务端也判，所以改过的客户端无法绕过）。
+
+> 完整的"输入 → 行为 → 冷却槽"总表见 [`learn/29`](../../../../../learn/29-trigger-map-after-rebinding.md)。
 
 ### 给它加技能时要注意的结构
 
 1. `weapon/PillarKind.java` 是"黑星/黑曜石方"的变体表——白星的柱子**不属于**它，因为飞行行为和生长行为
    不是同一套字段（这也是 `WhitePillarEntity` 单独成类的原因）；
-2. `weapon/entity/ModEntities.java` 里，黑柱与白柱的类型、以及各自的 `PillarSpec`（只有黑柱有）都在这；
-3. 触发层：`client/input/GestureInput`（黑星手势）、`client/input/WhiteStarInput`（白星按住）、
-   `common/network/ModNetworking`（服务端权威实现）、`weapon/OffhandWhiteStar`（副手伤害事件）；
-4. 想给白星加"生长型"柱子的话，照 `ModEntities` 里黑柱的写法加类型 + `PillarSpec` 即可，不用动实体类。
+2. **变体只共用几何，特性各自算**：`PillarKind.isBlackBlockStar()` 是"黑星专属"的唯一判据，
+   `+3 被动 / 黑暗 / 黑标记 B` 全都过它；黑曜石柱因此不吃黑星特性（见 `learn/30`）。加新变体时先决定它是不是黑星；
+3. `weapon/entity/ModEntities.java` 里，黑柱与白柱的类型、以及各自的 `PillarSpec`（只有黑柱有）都在这；
+4. 触发层：`client/input/GestureInput`（黑星手势）、`client/input/BlackStarSneakInput`（黑星潜行层）、
+   `client/input/WhiteStarInput`（白星按住/双击/潜行）、`common/network/ModNetworking`（服务端权威实现）、
+   `weapon/OffhandWhiteStar`（副手伤害事件）；
+5. 想给白星加"生长型"柱子的话，照 `ModEntities` 里黑柱的写法加类型 + `PillarSpec` 即可，不用动实体类。
 
 ## 加一个方块/物品的最短路径
 

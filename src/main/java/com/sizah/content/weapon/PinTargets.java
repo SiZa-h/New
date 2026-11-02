@@ -108,10 +108,9 @@ public final class PinTargets {
 				continue;
 			}
 
-			// The weapon has to stay in the main hand, exactly like the fire stream — and sneaking releases the
-			// grip as well, because that button belongs to the white block infection while sneak is held.
-			if (player.getMainHandItem().getItem() != com.sizah.content.item.ModItems.WHITE_BLOCK_STAR
-					|| player.isShiftKeyDown()) {
+			// The weapon has to stay in the main hand, exactly like the fire stream. Sneaking does **not** release
+			// the grip: the grip is toggled by the double click, so sneak is free to be the infection again.
+			if (player.getMainHandItem().getItem() != com.sizah.content.item.ModItems.WHITE_BLOCK_STAR) {
 				iterator.remove();
 				continue;
 			}

@@ -106,6 +106,7 @@ public final class ModLanguageProvider {
 			Map.entry("entity.new-mod.pillar_barrage", "黑方块柱弹幕"),
 			Map.entry("entity.new-mod.mark_lock", "标记禁锢"),
 			Map.entry("entity.new-mod.white_pillar", "白方块柱"),
+			Map.entry("entity.new-mod.thorn_pillar", "刺白方块柱"),
 
 			// Status effects (the mark icons and the decay effect)
 			Map.entry("effect.new-mod.mark_pillar_clash", "黑标记 1"),

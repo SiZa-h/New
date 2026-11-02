@@ -1,5 +1,6 @@
 package com.sizah.client;
 
+import com.sizah.client.input.BlackStarSneakInput;
 import com.sizah.client.input.GestureInput;
 import com.sizah.client.input.WhiteStarInput;
 import com.sizah.client.render.BlackBlockPillarRenderer;
@@ -16,13 +17,11 @@ import com.sizah.common.NewMod;
 import com.sizah.content.weapon.entity.ModEntities;
 import com.sizah.content.weapon.PillarKind;
 import com.sizah.content.weapon.PillarWeaponItem;
-import com.sizah.common.network.CorruptPayload;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.event.client.player.ClientPreAttackCallback;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.minecraft.client.KeyMapping;
@@ -30,7 +29,6 @@ import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.SwingAnimation;
 
 /**
  * Client entry point: registers the entity renderers, "left click fires a black block pillar while
@@ -59,6 +57,9 @@ public class NewModClient implements ClientModInitializer {
 		// as white blocks (see WhitePillarRenderer).
 		EntityRenderers.register(ModEntities.WHITE_PILLAR, WhitePillarRenderer::new);
 
+		// The summoned thorn is a WhitePillarEntity too, so it reuses the same renderer: only its movement differs.
+		EntityRenderers.register(ModEntities.THORN_PILLAR, WhitePillarRenderer::new);
+
 		// The entities below are logic only and should have no appearance: they all use the same "draw nothing" renderer
 		EntityRenderers.register(ModEntities.BLACK_HOLE, InvisibleRenderer::new);
 		EntityRenderers.register(ModEntities.HORIZONTAL_AXIS, InvisibleRenderer::new);
@@ -85,13 +86,19 @@ public class NewModClient implements ClientModInitializer {
 		// Push the settings over on every world/server join (the server side keeps them in memory only, so this is what keeps the two in step)
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ClientSettings.send());
 
-		// The white block star's two held abilities: hold left = a stream of white pillars, hold right = carry the
-		// creature under the crosshair. It has a tick handler of its own because both last as long as the button is
-		// down, which is not something a click callback can report.
+		// The white block star's inputs: hold left = a stream of white pillars, double click right = grip toggle,
+		// sneak + right = infection. A tick handler of its own, because the fire lasts as long as the button is down.
 		ClientTickEvents.END_CLIENT_TICK.register(WhiteStarInput::tick);
 
-		// Leaving the world must not leave the server thinking a button is still down.
-		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> WhiteStarInput.releaseAll());
+		// The black block star's sneak abilities: both on the right button, told apart by timing (single = infect,
+		// double = dash). Same reason for a tick handler: the decision needs a window, not a single callback.
+		ClientTickEvents.END_CLIENT_TICK.register(BlackStarSneakInput::tick);
+
+		// Leaving the world must not leave the server thinking a button is still down, nor keep a half double click.
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			WhiteStarInput.releaseAll();
+			BlackStarSneakInput.releaseAll();
+		});
 
 		ClientPreAttackCallback.EVENT.register((client, player, clickCount) -> {
 			// clickCount is non-zero only on the press itself; while the left button is held it stays 0, so nothing repeats.
@@ -101,14 +108,10 @@ public class NewModClient implements ClientModInitializer {
 
 			ItemStack stack = player.getMainHandItem();
 
-			// The white block star: the left button is its held fire (started and stopped by WhiteStarInput), and
-			// sneak + left is its white block infection. Vanilla attacking is intercepted either way.
+			// The white block star: the left button is its held fire (started and stopped by WhiteStarInput), so
+			// vanilla attacking is always intercepted. Sneak no longer does anything on the left button — the
+			// infection moved to sneak + right click.
 			if (stack.getItem() == ModItems.WHITE_BLOCK_STAR) {
-				if (player.isShiftKeyDown()) {
-					WhiteStarInput.sendCorrupt();
-					player.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, true);
-				}
-
 				return true;
 			}
 
@@ -117,14 +120,10 @@ public class NewModClient implements ClientModInitializer {
 				return false;
 			}
 
-			// Sneak + left click (Black Block Star only): infect the blocks in front, do not fire a short pillar
+			// Sneaking is the black block star's second layer, and both of those abilities live on the **right**
+			// button now (single = infection, double = dash), so the left button does nothing while sneaking.
 			if (player.isShiftKeyDown() && weapon.kind() == PillarKind.BLACK_BLOCK) {
-				if (ClientPlayNetworking.canSend(CorruptPayload.TYPE)) {
-					ClientPlayNetworking.send(CorruptPayload.INSTANCE);
-					player.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, true);
-				}
-
-				return true;      // intercept the vanilla left click
+				return true;      // intercept the vanilla left click, act on nothing
 			}
 
 			// Everything else is handled by GestureInput, which decides whether this click opens a vertical

@@ -41,7 +41,9 @@ public class PillarWeaponItem extends Item {
 
 	@Override
 	public void hurtEnemy(ItemStack itemStack, LivingEntity target, LivingEntity attacker) {
-		if (!attacker.level().isClientSide()) {
+		// Only the **black block star** has the darkness passive. The obsidian cube is created independently and
+		// inherits none of the black block star's traits, this one included.
+		if (this.kind.isBlackBlockStar() && !attacker.level().isClientSide()) {
 			target.addEffect(new MobEffectInstance(MobEffects.DARKNESS, DARKNESS_DURATION_TICKS), attacker);
 		}
 	}

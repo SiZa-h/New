@@ -984,20 +984,26 @@ public class BlackBlockPillarEntity extends Entity {
 			this.touchedThisTick.add(target);      // records "it is inside the pillar this tick", used to wrap up when it detaches
 
 			// Damage: the amount and whether armour is ignored are both decided by the weapon kind, and the
-			// weapon's passive adds its own bonus **here**, because the vanilla "attack damage bonus" hook only
-			// runs for a melee attack with the item in hand — which these weapons never do.
+			// **black block star's** passive adds its own bonus here, because the vanilla "attack damage bonus"
+			// hook only runs for a melee attack with the item in hand — which these weapons never do.
+			// The obsidian cube is its own thing: it inherits none of that (no bonus, no darkness, no black mark),
+			// it only shares the growing-pillar geometry.
 			// Each pillar settles damage against the same target only once, and the owner takes no damage.
 			if (!isOwner && !this.damagedTargets.contains(target.getUUID())) {
-				float damage = PillarWeaponItem.applyPillarPassive(
-						target, this.owner, kind.touchDamage() * (float) this.damageScale());
+				boolean blackStar = kind.isBlackBlockStar();
+				float touchDamage = kind.touchDamage() * (float) this.damageScale();
+				float damage = blackStar ? PillarWeaponItem.applyPillarPassive(target, this.owner, touchDamage) : touchDamage;
 
 				if (target.hurtServer(level, source, damage)) {
 					this.damagedTargets.add(target.getUUID());
 
-					// Any black block pillar that actually hurts someone leaves the **black mark B** on it, which
-					// is half of the pair that starts the decay effect. The owner never gets here, so the attacker
-					// is immune by construction — the same rule as for the combo marks.
-					Marks.applyAndSync(target, Marks.BLACK);
+					// Any **black block star** pillar that actually hurts someone leaves the black mark B on it,
+					// which is half of the pair that starts the decay effect. The owner never gets here, so the
+					// attacker is immune by construction — the same rule as for the combo marks.
+					// The obsidian pillar does not mark at all.
+					if (blackStar) {
+						Marks.applyAndSync(target, Marks.BLACK);
+					}
 				}
 			}
 

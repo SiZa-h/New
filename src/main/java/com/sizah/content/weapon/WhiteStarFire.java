@@ -30,11 +30,14 @@ public final class WhiteStarFire {
 	/** One bolt every 2 ticks: 10 per second, which with a 5 block bolt reads as a continuous stream. */
 	public static final int INTERVAL_TICKS = 2;
 
-	/** Radius (blocks) of the ring the bolts are produced on, around the player. */
+	/** Radius (blocks) of the ring the bolts are produced on, behind the player. */
 	public static final double SPAWN_RADIUS = 1.2D;
 
-	/** Height (blocks) above the player's feet at which that ring is drawn. */
-	public static final double SPAWN_HEIGHT = 1.0D;
+	/**
+	 * How far (blocks) **behind** the player the ring sits: the bolts are produced on a circle behind the player's
+	 * back and then fly forward past him, as specified ("a ring behind the player, not in front").
+	 */
+	public static final double SPAWN_BACK = 1.0D;
 
 	/** How far along the crosshair the bolts aim (blocks): they all converge on this point. */
 	public static final double AIM_DISTANCE = 48.0D;
@@ -97,7 +100,7 @@ public final class WhiteStarFire {
 		}
 	}
 
-	/** One bolt: produced on the ring around the player, aimed at the crosshair. */
+	/** One bolt: produced on a ring **behind the player**, aimed at the crosshair. */
 	private static void fire(ServerPlayer player) {
 		if (!(player.level() instanceof ServerLevel level)) {
 			return;
@@ -106,14 +109,19 @@ public final class WhiteStarFire {
 		Vec3 view = player.getViewVector(1.0F).normalize();
 		Vec3 aim = player.getEyePosition().add(view.scale(AIM_DISTANCE));
 
-		// A ring around the player's middle, so the bolts visibly come "from around him" rather than from one point.
+		// **A ring behind the player**, 1 block behind his middle, perpendicular to the aim: the bolts come out of
+		// his back and fly past him towards the crosshair (as specified — behind, not in front).
+		Vec3 center = player.position()
+				.add(0.0D, player.getBbHeight() * 0.5D, 0.0D)
+				.subtract(view.scale(SPAWN_BACK));
+
 		float angle = player.getRandom().nextFloat() * Mth.TWO_PI;
 		Vec3 side = new Vec3(-view.z, 0.0D, view.x).normalize();
-		Vec3 around = side.scale(Math.cos(angle) * SPAWN_RADIUS)
-				.add(0.0D, SPAWN_HEIGHT + Math.sin(angle) * SPAWN_RADIUS * 0.5D, 0.0D)
-				.add(view.scale(SPAWN_RADIUS));
+		Vec3 up = view.cross(side).normalize();
+		Vec3 ring = side.scale(Math.cos(angle) * SPAWN_RADIUS)
+				.add(up.scale(Math.sin(angle) * SPAWN_RADIUS));
 
-		Vec3 spawn = player.position().add(around);
+		Vec3 spawn = center.add(ring);
 
 		WhitePillarEntity pillar = new WhitePillarEntity(ModEntities.WHITE_PILLAR, level);
 		pillar.setOwner(player);

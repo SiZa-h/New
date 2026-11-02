@@ -131,6 +131,9 @@ public final class ModEntities {
 	/** White block pillar: the thin, fast projectile of the white block star (0.1 blocks thick, 5 long). */
 	public static final ResourceKey<EntityType<?>> WHITE_PILLAR_KEY = key("white_pillar");
 
+	/** Thorn white block pillar: summoned around a creature that has been hit by white pillars thirty times. */
+	public static final ResourceKey<EntityType<?>> THORN_PILLAR_KEY = key("thorn_pillar");
+
 	/** Black block pillar barrage: triggered once all three marks are collected, lasting 10 seconds. */
 	public static final ResourceKey<EntityType<?>> PILLAR_BARRAGE_KEY = key("pillar_barrage");
 
@@ -194,6 +197,20 @@ public final class ModEntities {
 			.updateInterval(1)
 			.noSave()
 			.build(WHITE_PILLAR_KEY);
+
+	/**
+	 * Thorn white block pillar: the same shape as the white pillar, but it is **not spent on a hit** and ignores
+	 * blocks entirely — see {@link ThornPillarEntity}. It is summoned by {@code WhitePillarStrikes} only, hence
+	 * {@code noSummon()}.
+	 */
+	public static final EntityType<ThornPillarEntity> THORN_PILLAR = EntityType.Builder
+			.of(ThornPillarEntity::new, MobCategory.MISC)
+			.sized(WhitePillarEntity.THICKNESS, (float) WhitePillarEntity.LENGTH)
+			.clientTrackingRange(12)
+			.updateInterval(1)
+			.noSave()
+			.noSummon()
+			.build(THORN_PILLAR_KEY);
 
 	/** Black block pillar barrage: follows the target for 10 seconds (20 seconds in practice, see {@link PillarBarrageEntity#DURATION_TICKS}), one pillar every 0.3 seconds. */
 	public static final EntityType<PillarBarrageEntity> PILLAR_BARRAGE = EntityType.Builder
@@ -289,6 +306,7 @@ public final class ModEntities {
 		Registry.register(BuiltInRegistries.ENTITY_TYPE, BARRAGE_PILLAR_KEY, BARRAGE_PILLAR);
 		Registry.register(BuiltInRegistries.ENTITY_TYPE, DASH_PILLAR_KEY, DASH_PILLAR);
 		Registry.register(BuiltInRegistries.ENTITY_TYPE, WHITE_PILLAR_KEY, WHITE_PILLAR);
+		Registry.register(BuiltInRegistries.ENTITY_TYPE, THORN_PILLAR_KEY, THORN_PILLAR);
 		Registry.register(BuiltInRegistries.ENTITY_TYPE, PILLAR_BARRAGE_KEY, PILLAR_BARRAGE);
 		Registry.register(BuiltInRegistries.ENTITY_TYPE, MARK_LOCK_KEY, MARK_LOCK);
 		Registry.register(BuiltInRegistries.ENTITY_TYPE, BLACK_HOLE_KEY, BLACK_HOLE);

@@ -44,8 +44,10 @@ public final class WeaponCooldowns {
 	 *     <li>{@link #HORIZONTAL_RIGHT}: right single click + swipe left (clash pillar at the right end of the horizontal axis);</li>
 	 *     <li>{@link #VERTICAL_BOTTOM}: left single click + swipe up (clash pillar at the bottom end of the vertical axis);</li>
 	 *     <li>{@link #VERTICAL_TOP}: left single click + swipe down (clash pillar at the top end of the vertical axis);</li>
-	 *     <li>{@link #SNEAK_RIGHT}: **sneak + right click** (spawns a dash pillar behind you and shoves the player out);</li>
-	 *     <li>{@link #SNEAK_LEFT}: **sneak + left click** (infects the stretch of blocks in front into black blocks).</li>
+	 *     <li>{@link #SNEAK_DASH}: **sneak + double right click** (spawns a dash pillar behind you and shoves the
+	 *         player out);</li>
+	 *     <li>{@link #SNEAK_INFECT}: **sneak + single right click** (infects the stretch of blocks in front — black
+	 *         blocks for the black star, white for the white one).</li>
 	 * </ol>
 	 */
 	public enum Slot {
@@ -55,8 +57,8 @@ public final class WeaponCooldowns {
 		HORIZONTAL_RIGHT,
 		VERTICAL_BOTTOM,
 		VERTICAL_TOP,
-		SNEAK_RIGHT,
-		SNEAK_LEFT
+		SNEAK_DASH,
+		SNEAK_INFECT
 	}
 
 	/** Player UUID → (item + slot → the game tick at which it can be used again). */

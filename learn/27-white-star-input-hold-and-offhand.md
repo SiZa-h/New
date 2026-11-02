@@ -1,7 +1,10 @@
-# 27. 白方块之星的输入层：按住技能、潜行优先、副手连击
+# 27. 白方块之星的输入层：按住、双击、潜行优先、副手连击
 
-白星的技能触发方式和黑星完全不同：黑星是**点击类**（双击、单击+滑动），白星是**按住类**（按住左键/右键）。
-点击类可以用现成的回调，按住类不行——这一篇就是那套输入层。
+白星的技能触发和黑星不一样：黑星是一整套**点击类**（双击、单击+滑动），白星则是**按住 + 双击 + 潜行**三种混着用。
+点击类可以用现成的回调，其余都得自己采样——这一篇就是那套输入层。
+
+> **触发已改过一次**（见 [learn/29](29-trigger-map-after-rebinding.md)）：右键抓取从"按住"改成了**双击切换**，
+> 感染从"潜行+左键"改成了"**潜行+右键**"。本篇文章里的代码是改完之后的版本。
 
 ## 1. 为什么点击回调不够用
 
@@ -19,7 +22,6 @@ this.continueAttack(this.gui.screen() == null && !instantAttack && this.options.
 ```java
 // client/input/WhiteStarInput.java —— 每客户端 tick 采样一次
 boolean leftDown = holdingStar && !sneaking && client.options.keyAttack.isDown();
-boolean rightDown = holdingStar && !sneaking && client.options.keyUse.isDown();
 
 if (leftDown != leftWasDown) {                 // 只在"边沿"发包，不是每 tick 都发
 	send(leftDown ? WhiteActionPayload.FIRE_START : WhiteActionPayload.FIRE_STOP);
@@ -32,6 +34,24 @@ if (leftDown != leftWasDown) {                 // 只在"边沿"发包，不是�
 1. **要么发 START 要么发 STOP**，绝不每 tick 重复发（那会变成每 tick 一次网络包）；
 2. 用**边沿检测**（`leftDown != leftWasDown`），所以按一次只发一次；
 3. 释放场景要写全：换武器、开界面、离开世界（`ClientPlayConnectionEvents.DISCONNECT` → `releaseAll()`）。
+
+**右键则是另一套**：它是"双击切换抓取"，但同一颗按钮在潜行时又是感染。于是同一个 tick 采样里要做两件事：
+
+```java
+if (rightDown && !rightWasDown) {
+	if (sneaking) {
+		send(WhiteActionPayload.CORRUPT);        // 潜行：单击即感染，不用等第二下
+		lastRightPress = -1000;
+	} else if (tick - lastRightPress <= DOUBLE_CLICK_TICKS) {
+		send(WhiteActionPayload.PULL_TOGGLE);    // 双击：切换抓取
+		lastRightPress = -1000;
+	} else {
+		lastRightPress = tick;                   // 第一击：等 4 tick 看有没有第二击
+	}
+}
+```
+
+> 双击只对**非潜行**有效：潜行时右键明确就是感染，不需要等窗口，也就没有"延迟 4 tick"的手感问题。
 
 ## 2. 服务端不信任"按住"，只信任"意图"
 
@@ -52,17 +72,21 @@ private static void handleWhiteAction(ServerPlayer player, WhiteActionPayload.Ac
 	boolean sneaking = player.isShiftKeyDown();
 
 	switch (action) {
-		case FIRE_START -> { if (holdingStar && !sneaking) WhiteStarFire.start(player); }
-		case FIRE_STOP  -> WhiteStarFire.stop(player);
-		case PULL_START -> { if (holdingStar && !sneaking) PinTargets.grab(player); }
-		case PULL_STOP  -> PinTargets.release(player);
-		case CORRUPT    -> { if (holdingStar && sneaking) corruptTo(player, ModBlocks.WHITE_BLOCK); }
+		case FIRE_START  -> { if (holdingStar && !sneaking) WhiteStarFire.start(player); }
+		case FIRE_STOP   -> WhiteStarFire.stop(player);
+		case PULL_TOGGLE -> {                       // 双击右键：抓取 ⇄ 松开
+			if (holdingStar && !sneaking) {
+				if (PinTargets.isHolding(player)) PinTargets.release(player);
+				else PinTargets.grab(player);
+			}
+		}
+		case CORRUPT     -> { if (holdingStar && sneaking) corruptTo(player, ModBlocks.WHITE_BLOCK); }
 	}
 }
 ```
 
 于是：射速、抓取判定、感染的目标方块全部由服务端说了算；改过的客户端无法靠伪造包变成机枪，也无法
-"不潜行就感染"，更无法指定感染成什么方块。
+"不潜行就感染"，更无法指定感染成什么方块。**"切换"也在服务端做**——因为只有服务端知道现在是否有握持着目标。
 
 ## 3. 潜行优先：一个真实 bug 的修法
 
@@ -70,23 +94,25 @@ private static void handleWhiteAction(ServerPlayer player, WhiteActionPayload.Ac
 
 **原因**：白柱是"按住左键"触发的，而潜行左键时 `keyAttack` 本来就处于按下状态——
 这次"按住"的起点发生在潜行之前（或同一 tick），按下沿早就判过了，`FIRE_START` 已经发出去；
-客户端随后发 `CORRUPT` 并不影响服务端那条**已经在跑**的发射流。
+客户端随后再发一个"感染"包，并不影响服务端那条**已经在跑**的发射流。
 
-**修法**：把"潜行"作为两个按住技能的**否决条件**，而且在四处都判：
+**修法**：把"潜行"作为白星按住技能的**否决条件**，而且在多处都判：
 
 | 位置 | 判定 |
 | --- | --- |
-| `WhiteStarInput`（客户端采样） | `!sneaking` 才算按下 → 一潜行就发 `FIRE_STOP` / `PULL_STOP` |
+| `WhiteStarInput`（客户端采样） | `!sneaking` 才算按下 → 一潜行就发 `FIRE_STOP`；右键在潜行时改发 `CORRUPT` |
 | `WhiteStarFire.tick`（服务端权威） | 主手不是白星**或潜行中** → 移除该玩家的发射流 |
-| `PinTargets.tick`（服务端权威） | 同上 → 潜行时松手，被钉的生物立刻自由 |
-| `ModNetworking.handleWhiteAction` | `FIRE_START`/`PULL_START` 要求非潜行；`CORRUPT` 要求正在潜行 |
+| `ModNetworking.handleWhiteAction` | `FIRE_START`/`PULL_TOGGLE` 要求非潜行；`CORRUPT` 要求正在潜行 |
 
 > 教训：**"同一个按键有两种含义"时，优先级必须显式写出来，并且在权威端也写一遍**。
 > 只在客户端拦一次，等于把规则交给了可以被修改的一侧。
 
-## 4. 按住右键：把生物钉在视线上（`PinTargets`）
+> 后来的改版把感染挪到了"潜行+右键"，于是抓取（双击右键）与感染不再抢同一个键位；
+> 但"潜行时右键属于感染"这条优先级保留了下来。
 
-需求：**30 格内被准心指向的生物保持在玩家视线上。**
+## 4. 双击右键：把生物钉在视线上（`PinTargets`）
+
+需求：**30 格内被准心指向的生物保持在玩家视线上**；触发方式是**双击右键**（不是按住）。
 
 - **抓取**用射线 vs 包围盒的 slab 判定（自己写，不借 `Projectile` 的私有方法）：
 
@@ -109,6 +135,9 @@ living.fallDistance = 0.0F;                                            // 松开
 
 细节：抓取**只发生一次**（之后即使准心扫到别的生物也不换目标），距离按抓取时算，所以它不会被吸到脸前，
 也不会拖在身后；`fallDistance = 0` 是那种"看起来该写、忘了就出事"的一行。
+
+**双击 = 切换**：再双击一次就是松开。所以 `PinTargets.tick` 里不再因为"潜行"而松手——
+松手只由三个条件触发：再双击、目标消失/死亡、玩家换掉武器。
 
 ## 5. 副手：任何伤害都追加一轮齐射（`OffhandWhiteStar`）
 
@@ -141,14 +170,16 @@ ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, baseDamage, dama
 | 按住没反应 / 只放一次 | 只用了点击回调；按住要自己采样按键状态 |
 | 网络包每 tick 狂发 | 没有做边沿检测，`isDown()` 直接发包 |
 | 松开后技能还在继续 | 没有处理换武器 / 开界面 / 断开连接 |
-| 潜行左键同时射柱 | 没有把"潜行优先"写到权威端 |
+| 潜行时还在射柱 | 没有把"潜行优先"写到权威端 |
 | 副手连击停不下来 | 齐射伤害触发自身；需要最小间隔 |
 | 抓住的生物乱动 / 松手摔死 | 每 tick 未清速度，或忘了清 `fallDistance` |
-| 准心扫过就换目标 | 抓取写进了每 tick 的循环，而不是"按下时抓一次" |
+| 准心扫过就换目标 | 抓取写进了每 tick 的循环，而不是"触发时抓一次" |
+| 双击右键抓不住 | 双击判定写成了"两次按下都立即执行"；应当第一次只记时间，第二次才动作 |
+| 潜行+右键既感染又抓取 | 客户端没有对"潜行"分支短路，两件事都发了包 |
 
 ## 7. 小结
 
-- **点击用回调、按住用采样**：`ClientPreAttackCallback` 只报"按下"，按住类技能必须自己每 tick 看键位；
-- 包体只传**意图**（开始/停止），数值与判定全部留在服务端；
+- **点击用回调、按住用采样、双击用窗口**：三种节奏对应三种实现，别混用；
+- 包体只传**意图**（开始/停止/切换/感染），数值与判定全部留在服务端；
 - "一个按键两种含义"时，**优先级要显式、且在客户端与权威端各写一遍**；
 - 伤害事件适合做"任何来源都触发"的联动，但要给**自己造成的伤害**留一条防自激的限流。

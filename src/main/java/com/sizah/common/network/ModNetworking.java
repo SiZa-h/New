@@ -42,10 +42,11 @@ import org.jspecify.annotations.Nullable;
  *         **second click of a double click** ({@link PillarPayload}), and the server spawns a regular pillar in
  *         front of the player;</li>
  *     <li><b>Right click</b> (black block star only): the client asks for the long pillar the same way
- *         ({@link PillarPayload}); the use events below are left with nothing but the **sneak dash**, because
- *         they fire on both sides and would otherwise fire the pillar on a single click;</li>
- *     <li><b>Mouse gestures</b> ({@link AxisStrikePayload}) and <b>sneak left click</b> ({@link CorruptPayload})
- *         each have a payload of their own.</li>
+ *         ({@link PillarPayload}); the use events below only swallow vanilla handling for the two stars, because
+ *         they fire on both sides and would otherwise fire a pillar on every single click;</li>
+ *     <li><b>Mouse gestures</b> ({@link AxisStrikePayload}); <b>sneak abilities of the black block star</b>
+ *         ({@link BlackSneakPayload}: single right click infects, double right click dashes); and the
+ *         <b>white block star's inputs</b> ({@link WhiteActionPayload}) each have a payload of their own.</li>
  * </ul>
  *
  * <p><b>Both pillars share one central axis</b>: the **player's view direction axis** (including pitch). The
@@ -97,7 +98,7 @@ public final class ModNetworking {
 		PayloadTypeRegistry.serverboundPlay().register(PillarPayload.TYPE, PillarPayload.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(AxisStrikePayload.TYPE, AxisStrikePayload.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(SettingsPayload.TYPE, SettingsPayload.STREAM_CODEC);
-		PayloadTypeRegistry.serverboundPlay().register(CorruptPayload.TYPE, CorruptPayload.STREAM_CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(BlackSneakPayload.TYPE, BlackSneakPayload.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(WhiteActionPayload.TYPE, WhiteActionPayload.STREAM_CODEC);
 
 		// Behaviours 1 and 2: both are **double click** abilities now, and the client only asks for them once the
@@ -123,12 +124,14 @@ public final class ModNetworking {
 		ServerPlayNetworking.registerGlobalReceiver(SettingsPayload.TYPE, (payload, context) ->
 				Settings.apply(payload.breakBedrock(), payload.explosionBreaksBlocks()));
 
-		// Sneak left click: find a block from the eyes along the view direction and infect the area around it into black blocks
-		ServerPlayNetworking.registerGlobalReceiver(CorruptPayload.TYPE, (payload, context) ->
-				corrupt(context.player()));
+		// The black block star's sneak abilities, both on the right button:
+		//   single right click while sneaking  -> infection (sent after the double click window)
+		//   double right click while sneaking  -> dash pillar (sent on the second press)
+		ServerPlayNetworking.registerGlobalReceiver(BlackSneakPayload.TYPE, (payload, context) ->
+				handleBlackSneak(context.player(), payload.action()));
 
-		// The white block star: hold left click to stream white block pillars, hold right click to carry the
-		// creature under the crosshair, sneak + left click to infect with white blocks.
+		// The white block star: hold left click to stream white block pillars, double click right to toggle the
+		// grip, sneak + right click to infect with white blocks.
 		ServerPlayNetworking.registerGlobalReceiver(WhiteActionPayload.TYPE, (payload, context) ->
 				handleWhiteAction(context.player(), payload.action()));
 
@@ -152,15 +155,15 @@ public final class ModNetworking {
 	}
 
 	/**
-	 * The white block star's hold abilities and its infection.
+	 * The white block star's inputs: the held fire, the grip toggle and the infection.
 	 *
-	 * <p>The weapon is re-checked here rather than trusted: the packets only say "the button went down" or "it came
-	 * up", and everything else (what to fire, what to grab, what to paint) is decided from the server's own view of
-	 * the player.
+	 * <p>The weapon is re-checked here rather than trusted: the packets only say "start/stop", "toggle" or
+	 * "infect", and everything else (what to fire, what to grab, what to paint) is decided from the server's own
+	 * view of the player.
 	 *
-	 * <p><b>Sneak has priority over both held abilities.</b> While sneak is held, the left button is the white
-	 * block infection and the right button does nothing, so a hostile client cannot fire pillars through the
-	 * infection — and the infection itself is only accepted while the player really is sneaking.
+	 * <p><b>Sneak has priority</b>: while sneaking the left button does nothing, and the right button is the white
+	 * block infection — so the fire cannot run through the infection, and the infection is only accepted while the
+	 * player really is sneaking.
 	 */
 	private static void handleWhiteAction(ServerPlayer player, WhiteActionPayload.Action action) {
 		boolean holdingStar = player.getMainHandItem().getItem() == ModItems.WHITE_BLOCK_STAR;
@@ -173,12 +176,16 @@ public final class ModNetworking {
 				}
 			}
 			case FIRE_STOP -> WhiteStarFire.stop(player);
-			case PULL_START -> {
+			case PULL_TOGGLE -> {
 				if (holdingStar && !sneaking) {
-					PinTargets.grab(player);
+					// double click right toggles: grab what the crosshair points at, or let go of what is held
+					if (PinTargets.isHolding(player)) {
+						PinTargets.release(player);
+					} else {
+						PinTargets.grab(player);
+					}
 				}
 			}
-			case PULL_STOP -> PinTargets.release(player);
 			case CORRUPT -> {
 				if (holdingStar && sneaking) {
 					corruptTo(player, com.sizah.content.block.ModBlocks.WHITE_BLOCK);
@@ -281,41 +288,49 @@ public final class ModNetworking {
 	}
 
 	/**
-	 * The right-click **use events** (item and block). Since the ordinary long pillar moved to
-	 * {@link #fireLongPillar}, the only thing left for these events to do is the **sneak right-click dash**;
-	 * every other right click is swallowed locally by the client (it returns {@code FAIL}, which also stops the
-	 * use packet from being sent) and, if it turns out to be a double click, re-requested through
-	 * {@link PillarPayload}.
+	 * The black block star's two sneak abilities, both requested over {@link BlackSneakPayload}.
 	 *
-	 * <p>Both events fire on **both sides**, so the sneak test and the dash itself are done on the server side
-	 * only; the client-side pass just reports that the click was already handled.
+	 * <p>The server re-checks everything: the player must really be sneaking, and the main hand must really be the
+	 * black block star. The client only decides **which** of the two it was (single click = infect, double click =
+	 * dash), by timing.
+	 */
+	private static void handleBlackSneak(ServerPlayer player, BlackSneakPayload.Action action) {
+		ItemStack stack = player.getMainHandItem();
+
+		if (!(stack.getItem() instanceof PillarWeaponItem weapon)
+				|| weapon.kind() != PillarKind.BLACK_BLOCK
+				|| !player.isShiftKeyDown()) {
+			return;      // not the black block star, or not sneaking: neither ability is available
+		}
+
+		switch (action) {
+			case DASH -> sneakDash(player, stack);
+			case INFECT -> corruptTo(player, com.sizah.content.block.ModBlocks.BLACK_BLOCK);
+		}
+	}
+
+	/**
+	 * The right-click **use events** (item and block), which exist only to keep vanilla from also acting on a
+	 * right click: every right-click ability of the two stars is requested over a payload, so this handler just
+	 * swallows the event for those weapons.
 	 *
-	 * @return {@code PASS} to let vanilla (and every other mod) handle it as usual, {@code SUCCESS} to consume it
+	 * <p>Both events fire on **both sides**, so the client pass returns {@code FAIL} (which stops the use packet
+	 * and any block interaction) and the server pass returns {@code PASS} (the payload path is the authority).
+	 *
+	 * @return {@code PASS} to let vanilla (and every other mod) handle it as usual, {@code FAIL} to swallow it
 	 */
 	private static InteractionResult handleUseEvent(Player player, Level level, InteractionHand hand) {
 		ItemStack stack = player.getMainHandItem();
 
-		if (hand != InteractionHand.MAIN_HAND
-				|| !(stack.getItem() instanceof PillarWeaponItem weapon)
-				|| weapon.kind() != PillarKind.BLACK_BLOCK) {
-			return InteractionResult.PASS;      // not the black block star: nothing here is ours
+		boolean blackStar = stack.getItem() instanceof PillarWeaponItem weapon
+				&& weapon.kind() == PillarKind.BLACK_BLOCK;
+		boolean whiteStar = stack.getItem() == ModItems.WHITE_BLOCK_STAR;
+
+		if (hand != InteractionHand.MAIN_HAND || (!blackStar && !whiteStar)) {
+			return InteractionResult.PASS;      // not one of the two stars: nothing here is ours
 		}
 
-		if (!player.isShiftKeyDown()) {
-			// Ordinary right click: the client decides "gesture or double click" on its own and, if it turns out
-			// to be the long pillar, asks for it over PillarPayload.
-			return level.isClientSide() ? InteractionResult.FAIL : InteractionResult.PASS;
-		}
-
-		if (level.isClientSide()) {
-			return InteractionResult.FAIL;      // sneak + right click: the server side below does the work
-		}
-
-		if (!(player instanceof ServerPlayer serverPlayer)) {
-			return InteractionResult.PASS;
-		}
-
-		return sneakDash(serverPlayer, stack);
+		return level.isClientSide() ? InteractionResult.FAIL : InteractionResult.PASS;
 	}
 
 	/**
@@ -417,7 +432,7 @@ public final class ModNetworking {
 	 * each other.
 	 */
 	private static InteractionResult sneakDash(ServerPlayer player, ItemStack stack) {
-		if (!WeaponCooldowns.isReady(player, stack, WeaponCooldowns.Slot.SNEAK_RIGHT)) {
+		if (!WeaponCooldowns.isReady(player, stack, WeaponCooldowns.Slot.SNEAK_DASH)) {
 			return InteractionResult.SUCCESS;      // on cooldown: swallow this right click
 		}
 
@@ -437,7 +452,7 @@ public final class ModNetworking {
 		pillar.setPos(start.x, start.y, start.z);
 		level.addFreshEntity(pillar);
 
-		WeaponCooldowns.apply(player, stack, WeaponCooldowns.Slot.SNEAK_RIGHT, SNEAK_COOLDOWN_TICKS);
+		WeaponCooldowns.apply(player, stack, WeaponCooldowns.Slot.SNEAK_DASH, SNEAK_COOLDOWN_TICKS);
 		return InteractionResult.SUCCESS;
 	}
 
@@ -466,27 +481,19 @@ public final class ModNetworking {
 	}
 
 	/**
-	 * Sneak left click of the **black** block star: find a block from the eyes along the view direction (at most
-	 * {@link #CORRUPT_REACH} blocks away) and infect a patch around it into black blocks. The white block star has
-	 * its own entry point ({@link #corruptTo}) with the same body but a different block.
-	 */
-	private static void corrupt(ServerPlayer player) {
-		corruptTo(player, com.sizah.content.block.ModBlocks.BLACK_BLOCK);
-	}
-
-	/**
-	 * Sneak left click: find a block from the eyes along the view direction (at most {@link #CORRUPT_REACH}
-	 * blocks away), and use it as the starting point to **infect the surrounding blocks into {@code target}**
-	 * within a {@link #CORRUPT_RADIUS}-block sphere; it settles when the player releases sneak
+	 * **Sneak right click** (both stars): find a block from the eyes along the view direction (at most
+	 * {@link #CORRUPT_REACH} blocks away), and use it as the starting point to **infect the surrounding blocks into
+	 * {@code target}** within a {@link #CORRUPT_RADIUS}-block sphere; it settles when the player releases sneak
 	 * (restore + drop the original drops and the painted blocks, see {@link Corruption}).
 	 *
 	 * <p>{@code target} is the block the held weapon paints with: black blocks for the black block star, white
-	 * blocks for the white one. It is decided here, on the server, from what the player is actually holding.
+	 * blocks for the white one. It is decided by the caller, on the server, from what the player is actually
+	 * holding — the client never names a block.
 	 */
 	private static void corruptTo(ServerPlayer player, net.minecraft.world.level.block.Block target) {
 		ItemStack stack = player.getMainHandItem();
 
-		if (!WeaponCooldowns.isReady(player, stack, WeaponCooldowns.Slot.SNEAK_LEFT)) {
+		if (!WeaponCooldowns.isReady(player, stack, WeaponCooldowns.Slot.SNEAK_INFECT)) {
 			return;      // on cooldown
 		}
 
@@ -504,7 +511,7 @@ public final class ModNetworking {
 		}
 
 		if (Corruption.start(player, hit.getBlockPos(), target)) {
-			WeaponCooldowns.apply(player, stack, WeaponCooldowns.Slot.SNEAK_LEFT, SNEAK_COOLDOWN_TICKS);
+			WeaponCooldowns.apply(player, stack, WeaponCooldowns.Slot.SNEAK_INFECT, SNEAK_COOLDOWN_TICKS);
 		}
 	}
 

@@ -2,6 +2,7 @@ package com.sizah.content.weapon.entity;
 
 import com.sizah.common.damage.ModDamageTypes;
 import com.sizah.content.effect.Marks;
+import com.sizah.content.weapon.WhitePillarStrikes;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -80,11 +81,12 @@ public class WhitePillarEntity extends Entity {
 	/**
 	 * Damage when it touches a creature.
 	 *
-	 * <p>Chosen to mirror the black block star (6.0) on the other side of the pair: 5.0, and it **bypasses
-	 * armour** — the white pillar is the magical half of the black/white pair, so it ignores armour while the
-	 * black one, being plain crushing, does too. Change this one constant to rebalance the whole weapon.
+	 * <p>Chosen to mirror the black block star (6.0) on the other side of the pair, and raised to **8.0** on
+	 * request ("increase the white pillar's damage"): it hits harder than a black pillar, which is the white
+	 * star's compensation for having a single, non-piercing bolt instead of a combo. It **bypasses armour**, like
+	 * the black pillars. Change this one constant to rebalance the whole weapon.
 	 */
-	public static final float TOUCH_DAMAGE = 5.0F;
+	public static final float TOUCH_DAMAGE = 8.0F;
 
 	/** Hard lifetime: the range divided by the speed, plus a little slack so a stalled pillar cannot linger. */
 	private static final int HARD_LIFETIME_TICKS = (int) Math.ceil(MAX_DISTANCE / SPEED_PER_TICK) + 10;
@@ -99,7 +101,8 @@ public class WhitePillarEntity extends Entity {
 	private static final EntityDataAccessor<Float> DATA_DIRECTION_Z =
 			SynchedEntityData.defineId(WhitePillarEntity.class, EntityDataSerializers.FLOAT);
 
-	private @Nullable Entity owner;
+	/** The shooter. Protected rather than private so the summoned thorn can reuse it as its damage source. */
+	protected @Nullable Entity owner;
 
 	/** How far it has travelled so far; the range check uses it. */
 	private double travelled;
@@ -110,7 +113,7 @@ public class WhitePillarEntity extends Entity {
 	private int restTicks;
 
 	/** Creatures already hit, so one pillar damages each of them exactly once. */
-	private final Set<UUID> hitTargets = new HashSet<>();
+	protected final Set<UUID> hitTargets = new HashSet<>();
 
 	public WhitePillarEntity(EntityType<? extends WhitePillarEntity> type, Level level) {
 		super(type, level);
@@ -232,6 +235,22 @@ public class WhitePillarEntity extends Entity {
 		return !state.getCollisionShape(level, pos).isEmpty();
 	}
 
+	/**
+	 * The one place white pillar damage is dealt: used by the flying bolt ({@link #strike}) and by the summoned
+	 * thorn ({@link ThornPillarEntity}), so both hit for the same amount through the same damage type.
+	 *
+	 * <p>It deliberately does **not** touch the 30-hit storm counter: a thorn's pierce must not count as a white
+	 * pillar hit (otherwise the storm would feed itself). Only {@link #strike} — a real fired bolt — reports to
+	 * {@code WhitePillarStrikes}.
+	 */
+	protected static void damage(ServerLevel level, LivingEntity target, @Nullable Entity owner) {
+		DamageSource damageSource = level.damageSources().source(ModDamageTypes.WHITE_BLOCK_STAR, owner);
+		target.hurtServer(level, damageSource, TOUCH_DAMAGE);
+
+		// The white mark W: half of the pair that starts the decay effect.
+		Marks.applyAndSync(target, Marks.WHITE);
+	}
+
 	/** Damage + mark the first creature in the way. Returns whether the pillar hit somebody and should stop. */
 	private boolean strike(ServerLevel level, Vec3 next) {
 		if (this.restTicks > 0) {
@@ -249,11 +268,10 @@ public class WhitePillarEntity extends Entity {
 				continue;      // the shooter is immune, and each creature is hit once
 			}
 
-			DamageSource source = level.damageSources().source(ModDamageTypes.WHITE_BLOCK_STAR, this.owner);
-			target.hurtServer(level, source, TOUCH_DAMAGE);
+			damage(level, target, this.owner);
 
-			// The white mark W: half of the pair that starts the decay effect.
-			Marks.applyAndSync(target, Marks.WHITE);
+			// A fired bolt counts towards the 30-hit storm; the summoned thorns do not (see #damage).
+			WhitePillarStrikes.onWhitePillarHit(level, target, this.owner);
 			return true;
 		}
 
