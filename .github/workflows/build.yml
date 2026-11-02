@@ -29,11 +29,13 @@ jobs:
     - name: Build with Gradle
       run: |
         chmod +x gradlew
-        # Two invocations on purpose: the data generator runs on the compiled mod, so Gradle cannot order it
-        # against the sources jar inside a single invocation ("implicit dependency" validation error). Running
-        # it first also makes the build fail loudly if the committed src/main/generated is out of date.
-        ./gradlew runDatagen
-        ./gradlew build
+
+        VERSION="${GITHUB_REF_NAME#v}"
+
+        echo "Building version: $VERSION"
+
+        ./gradlew runDatagen -Pversion="$VERSION"
+        ./gradlew build -Pversion="$VERSION"
 
 
     - name: Check jar output
